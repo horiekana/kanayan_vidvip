@@ -51,19 +51,37 @@ async function enableCam(event) {
     // getUsermedia parameters
     const constraints = {
         video: {
-            facingMode: 'environment'
-        }
+            width: { ideal: 3840 },  // 4K (横) を追加
+            height: { ideal: 2160 }, // 4K (縦) を追加
+            facingMode: 'environment' // 元々あったfacingModeも維持
+        },
+        audio: false // 音声が必要なければfalseを追加
     };
     // Activate the webcam stream.
     navigator.mediaDevices
         .getUserMedia(constraints)
         .then(function (stream) {
             video.srcObject = stream;
-            video.addEventListener("loadeddata", predictWebcam);
+            video.addEventListener("loadeddata", () => {
+                // ストリームの解像度が実際にどうなったかログに出力して確認
+                console.log('Actual video resolution:', video.videoWidth, 'x', video.videoHeight);
+                predictWebcam(); // データがロードされたら推論を開始
+            });
         })
         .catch((err) => {
-            console.error(err);
-            /* handle the error */
+            console.error("Error accessing camera with specified constraints:", err);
+            // エラーハンドリングを追加（前回の回答で提示したもの）
+            if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                alert("利用可能なカメラが見つかりませんでした。");
+            } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+                alert("カメラにアクセスできません。他のアプリケーションでカメラが使用されているか、カメラが正しく動作していません。");
+            } else if (err.name === "OverconstrainedError") {
+                alert("要求された4K解像度はカメラでサポートされていません。より低い解像度を試してください。");
+            } else if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                alert("カメラの使用が拒否されました。ブラウザの権限設定を確認してください。");
+            } else {
+                alert("カメラの起動中に不明なエラーが発生しました: " + err.message);
+            }
         });
 }
 let lastVideoTime = -1;
