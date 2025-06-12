@@ -176,7 +176,8 @@ async function predictWebcamWithTiling() {
                 
                 // タイルごとに物体検出を実行（静止画として処理）
                 const tileDetections = await objectDetector.detect(tileInfo.canvas);
-                
+                //何列目何行目のタイルかをログに出力
+                console.log(`Tile [${row}, ${col}] detections:`, tileDetections.detections.length);
                 // 座標をオリジナル画像に変換
                 tileDetections.detections.forEach(detection => {
                     // バウンディングボックスの座標を調整（重複領域のオフセットを考慮）
