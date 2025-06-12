@@ -135,12 +135,12 @@ function createTileCanvas(video, row, col) {
 }
 
 async function predictWebcamWithTiling() {
-    if (runningMode === "IMAGE") {
+    if (runningMode === "IMAGE") {// 画像モードが初期化されている場合、ビデオモードに切り替える
         runningMode = "VIDEO";
         await objectDetector.setOptions({ runningMode: "VIDEO" });
-    }
+    }// タイル処理のための時間を記録
     
-    let nowInMs = Date.now();
+    let nowInMs = Date.now();// 現在の時刻をミリ秒で取得
     if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         
