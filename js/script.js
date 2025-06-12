@@ -22,7 +22,7 @@ initializeObjectDetector();
 /********************************************************************
  // Demo 2: Continuously grab image from webcam stream and detect it.
  ********************************************************************/
-let video = document.getElementById("webcam");
+let video = document.getElementById("webcam");// ビデオ要素を取得
 let enableWebcamButton;
 
 // Check if webcam access is supported.
@@ -93,7 +93,7 @@ async function predictWebcam() {
     }
     let nowInMs = Date.now();
     // Detect objects using detectForVideo
-    if (video.currentTime !== lastVideoTime) {
+    if (video.currentTime !== lastVideoTime) {// ここでフレームが変わったか確認
         lastVideoTime = video.currentTime;
         const detections = await objectDetector.detectForVideo(video, nowInMs);
 
@@ -104,7 +104,73 @@ async function predictWebcam() {
     window.requestAnimationFrame(predictWebcam);
 }
 
-document.querySelector('#input_confidence_threshold').addEventListener('change', changedConfidenceThreshold);
+// 画像分割設定
+const GRID_ROWS = 3;      // 縦の分割数
+const GRID_COLS = 3;      // 横の分割数
+const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
+
+// Canvas要素を作成してタイル画像を切り出す関数
+function createTileCanvas(video, row, col) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const tileWidth = video.videoWidth / GRID_COLS;
+    const tileHeight = video.videoHeight / GRID_ROWS;
+    
+    canvas.width = tileWidth;
+    canvas.height = tileHeight;
+    
+    // 指定されたタイル部分を描画
+    ctx.drawImage(
+        video,
+        col * tileWidth, row * tileHeight, tileWidth, tileHeight,
+        0, 0, tileWidth, tileHeight
+    );
+    
+    return canvas;
+}
+
+async function predictWebcamWithTiling() {
+    if (runningMode === "IMAGE") {
+        runningMode = "VIDEO";
+        await objectDetector.setOptions({ runningMode: "VIDEO" });
+    }
+    
+    let nowInMs = Date.now();
+    if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        
+        let allDetections = [];
+        
+        // 3x3のタイルに分割して処理
+        for (let row = 0; row < GRID_ROWS; row++) {
+            for (let col = 0; col < GRID_COLS; col++) {
+                const tileCanvas = createTileCanvas(video, row, col);
+                
+                // タイルごとに物体検出を実行（静止画として処理）
+                const tileDetections = await objectDetector.detect(tileCanvas);
+                
+                // 座標をオリジナル画像に変換
+                const offsetX = col * (video.videoWidth / GRID_COLS);
+                const offsetY = row * (video.videoHeight / GRID_ROWS);
+                
+                tileDetections.detections.forEach(detection => {
+                    // バウンディングボックスの座標を調整
+                    detection.boundingBox.originX += offsetX;
+                    detection.boundingBox.originY += offsetY;
+                    allDetections.push(detection);
+                });
+            }
+        }
+        
+        // 全体の検出結果を処理
+        gotDetections({ detections: allDetections });
+    }
+    
+    window.requestAnimationFrame(predictWebcamWithTiling);
+}
+
+document.querySelector('#input_confidence_threshold').addEventListener('change', changedConfidenceThreshold);//これは信頼度閾値の変更イベントリスナーです
 function changedConfidenceThreshold(e) {
     objectDetector.setOptions(
         {
