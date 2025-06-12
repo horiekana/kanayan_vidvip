@@ -113,25 +113,48 @@ const GRID_ROWS = 3;      // 縦の分割数
 const GRID_COLS = 3;      // 横の分割数
 const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
 
-// Canvas要素を作成してタイル画像を切り出す関数
+// Canvas要素を作成してタイル画像を切り出す関数（重複領域対応）
 function createTileCanvas(video, row, col) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    const tileWidth = video.videoWidth / GRID_COLS;
-    const tileHeight = video.videoHeight / GRID_ROWS;
+    // 基本タイルサイズ
+    const baseTileWidth = video.videoWidth / GRID_COLS;
+    const baseTileHeight = video.videoHeight / GRID_ROWS;
     
-    canvas.width = tileWidth;
-    canvas.height = tileHeight;
+    // 重複領域のサイズ計算
+    const overlapWidth = baseTileWidth * OVERLAP_RATIO;
+    const overlapHeight = baseTileHeight * OVERLAP_RATIO;
     
-    // 指定されたタイル部分を描画
+    // 実際のタイルサイズ（重複領域を含む）
+    const actualTileWidth = baseTileWidth + (overlapWidth * 2);
+    const actualTileHeight = baseTileHeight + (overlapHeight * 2);
+    
+    canvas.width = actualTileWidth;
+    canvas.height = actualTileHeight;
+    
+    // 切り出し開始位置（重複分だけ前にずらす）
+    const startX = Math.max(0, (col * baseTileWidth) - overlapWidth);
+    const startY = Math.max(0, (row * baseTileHeight) - overlapHeight);
+    
+    // 実際の切り出しサイズ（画像境界を考慮）
+    const cropWidth = Math.min(actualTileWidth, video.videoWidth - startX);
+    const cropHeight = Math.min(actualTileHeight, video.videoHeight - startY);
+    
+    // 指定されたタイル部分を描画（重複領域を含む）
     ctx.drawImage(
         video,
-        col * tileWidth, row * tileHeight, tileWidth, tileHeight,
-        0, 0, tileWidth, tileHeight
+        startX, startY, cropWidth, cropHeight,
+        0, 0, cropWidth, cropHeight
     );
     
-    return canvas;
+    return {
+        canvas: canvas,
+        offsetX: startX,
+        offsetY: startY,
+        baseTileWidth: baseTileWidth,
+        baseTileHeight: baseTileHeight
+    };
 }
 
 async function predictWebcamWithTiling() {
@@ -149,29 +172,82 @@ async function predictWebcamWithTiling() {
         // 3x3のタイルに分割して処理
         for (let row = 0; row < GRID_ROWS; row++) {
             for (let col = 0; col < GRID_COLS; col++) {
-                const tileCanvas = createTileCanvas(video, row, col);
+                const tileInfo = createTileCanvas(video, row, col);
                 
                 // タイルごとに物体検出を実行（静止画として処理）
-                const tileDetections = await objectDetector.detect(tileCanvas);
+                const tileDetections = await objectDetector.detect(tileInfo.canvas);
                 
                 // 座標をオリジナル画像に変換
-                const offsetX = col * (video.videoWidth / GRID_COLS);
-                const offsetY = row * (video.videoHeight / GRID_ROWS);
-                
                 tileDetections.detections.forEach(detection => {
-                    // バウンディングボックスの座標を調整
-                    detection.boundingBox.originX += offsetX;
-                    detection.boundingBox.originY += offsetY;
+                    // バウンディングボックスの座標を調整（重複領域のオフセットを考慮）
+                    detection.boundingBox.originX += tileInfo.offsetX;
+                    detection.boundingBox.originY += tileInfo.offsetY;
                     allDetections.push(detection);
                 });
             }
         }
         
+        // 重複する検出結果をマージ
+        const mergedDetections = mergeOverlappingDetections(allDetections);
+        
         // 全体の検出結果を処理
-        gotDetections({ detections: allDetections });
+        gotDetections({ detections: mergedDetections });
     }
     
     window.requestAnimationFrame(predictWebcamWithTiling);
+}
+
+// 重複する検出結果をマージする関数
+function mergeOverlappingDetections(detections) {
+    const mergedDetections = [];
+    const processed = new Set();
+    
+    for (let i = 0; i < detections.length; i++) {
+        if (processed.has(i)) continue;
+        
+        const detection1 = detections[i];
+        let bestDetection = detection1;
+        processed.add(i);
+        
+        // 他の検出結果と比較
+        for (let j = i + 1; j < detections.length; j++) {
+            if (processed.has(j)) continue;
+            
+            const detection2 = detections[j];
+            
+            // 同じカテゴリかつ重複する場合
+            if (detection1.categories[0].categoryName === detection2.categories[0].categoryName &&
+                calculateIoU(detection1.boundingBox, detection2.boundingBox) > 0.3) {
+                
+                // より高いスコアの検出結果を採用
+                if (detection2.categories[0].score > bestDetection.categories[0].score) {
+                    bestDetection = detection2;
+                }
+                processed.add(j);
+            }
+        }
+        
+        mergedDetections.push(bestDetection);
+    }
+    
+    return mergedDetections;
+}
+
+// IoU（Intersection over Union）計算
+function calculateIoU(box1, box2) {
+    const x1 = Math.max(box1.originX, box2.originX);
+    const y1 = Math.max(box1.originY, box2.originY);
+    const x2 = Math.min(box1.originX + box1.width, box2.originX + box2.width);
+    const y2 = Math.min(box1.originY + box1.height, box2.originY + box2.height);
+    
+    if (x2 <= x1 || y2 <= y1) return 0;
+    
+    const intersection = (x2 - x1) * (y2 - y1);
+    const area1 = box1.width * box1.height;
+    const area2 = box2.width * box2.height;
+    const union = area1 + area2 - intersection;
+    
+    return intersection / union;
 }
 
 // 処理モードの設定
