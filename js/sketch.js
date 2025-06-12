@@ -2,6 +2,12 @@ let version = `
 last modified: 2023/09/20 12:20:49
 `
 var results;
+let processingMode = 'normal'; // 'normal' または 'tiling'
+let processingStats = {
+    detectionCount: 0,
+    lastUpdateTime: 0
+};
+
 function setup() {
     let p5canvas = createCanvas(400, 400);
     p5canvas.parent('#canvas');
@@ -9,6 +15,11 @@ function setup() {
     // お手々が見つかると以下の関数が呼び出される．resultsに検出結果が入っている．
     gotDetections = function (_results) {
         results = _results;
+        
+        // 統計情報を更新
+        processingStats.detectionCount = results.detections ? results.detections.length : 0;
+        processingStats.lastUpdateTime = Date.now();
+        
         strokeWeight(5)
         let video_width = document.querySelector('#webcam').videoWidth;
         let video_height = document.querySelector('#webcam').videoHeight;
@@ -25,17 +36,18 @@ function setup() {
             bb.height *= ratio.y;
         }
         adjustCanvas();
-
+        updateProcessingStatsDisplay();
     }
 
     document.querySelector('#version').innerHTML = version;
+    
+    // モード切り替えボタンの初期化
+    createModeToggleButton();
 }
 
 function draw() {
-
     clear();
     if (results) {
-
         for (let detection of results.detections) {
             let index = detection.categories[0].index;
             let bb = detection.boundingBox;
@@ -71,6 +83,105 @@ function draw() {
 
     stroke(250);
 }
+
+// モード切り替えボタンの作成
+function createModeToggleButton() {
+    // ボタンがすでに存在する場合は何もしない
+    if (document.querySelector('#tilingToggleButton')) {
+        return;
+    }
+    
+    // ボタン要素を作成
+    let button = document.createElement('button');
+    button.id = 'tilingToggleButton';
+    button.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s;
+    `;
+    
+    // ボタンテキストの初期設定
+    updateModeButtonText(button);
+    
+    // クリックイベントの設定
+    button.addEventListener('click', toggleProcessingMode);
+    
+    // ボタンをページに追加
+    document.body.appendChild(button);
+}
+
+// ボタンテキストの更新
+function updateModeButtonText(button = null) {
+    if (!button) {
+        button = document.querySelector('#tilingToggleButton');
+    }
+    if (button) {
+        button.textContent = processingMode === 'tiling' ? '通常モードに切り替え' : '分割モードに切り替え';
+        button.style.backgroundColor = processingMode === 'tiling' ? '#ffc107' : '#007bff';
+    }
+}
+
+// 処理統計の表示更新
+function updateProcessingStatsDisplay() {
+    let statsElement = document.querySelector('#processing_stats');
+    if (!statsElement) {
+        // 統計表示要素を作成
+        statsElement = document.createElement('div');
+        statsElement.id = 'processing_stats';
+        statsElement.style.cssText = `
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 1000;
+        `;
+        document.body.appendChild(statsElement);
+    }
+    
+    statsElement.innerHTML = `
+        検出数: ${processingStats.detectionCount} | 
+        モード: ${processingMode === 'tiling' ? '分割処理(3x3)' : '通常処理'} | 
+        更新: ${new Date(processingStats.lastUpdateTime).toLocaleTimeString()}
+    `;
+}
+
+// メインのモード切り替え関数
+function toggleProcessingMode() {
+    // モードを切り替え
+    processingMode = processingMode === 'normal' ? 'tiling' : 'normal';
+    
+    console.log(`処理モードを切り替えました: ${processingMode}`);
+    
+    // script.jsのモード切り替え関数を呼び出し
+    if (typeof toggleTilingMode === 'function') {
+        // script.jsの変数も同期
+        if (typeof useTiling !== 'undefined') {
+            useTiling = (processingMode === 'tiling');
+        }
+        toggleTilingMode();
+    } else {
+        console.warn('toggleTilingMode関数が見つかりません。script.jsが正しく読み込まれているか確認してください。');
+    }
+    
+    // UI更新
+    updateModeButtonText();
+    updateProcessingStatsDisplay();
+}
+
 function getColorByIndex(index) {
     const colors = [
         [221, 160, 221], // プラム
@@ -151,7 +262,6 @@ function getColorByName(name) {
     let color = obj ? obj.color : null;
     return color
 }
-
 
 function adjustCanvas() {
     // Get an element by its ID
