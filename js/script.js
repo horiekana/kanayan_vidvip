@@ -65,7 +65,11 @@ async function enableCam(event) {
             video.addEventListener("loadeddata", () => {
                 // ストリームの解像度が実際にどうなったかログに出力して確認
                 console.log('Actual video resolution:', video.videoWidth, 'x', video.videoHeight);
-                predictWebcam(); // データがロードされたら推論を開始
+                if (useTiling) {
+                    predictWebcamWithTiling(); // 分割処理
+                } else {
+                    predictWebcam(); // 通常処理
+                }
             });
         })
         .catch((err) => {
@@ -170,6 +174,9 @@ async function predictWebcamWithTiling() {
     window.requestAnimationFrame(predictWebcamWithTiling);
 }
 
+// 処理モードの設定
+let useTiling = false; // true: 分割処理, false: 通常処理
+
 document.querySelector('#input_confidence_threshold').addEventListener('change', changedConfidenceThreshold);//これは信頼度閾値の変更イベントリスナーです
 function changedConfidenceThreshold(e) {
     objectDetector.setOptions(
@@ -178,4 +185,15 @@ function changedConfidenceThreshold(e) {
         }
     )
     document.querySelector('#confidence_threshold').innerHTML = e.srcElement.value;
+}
+
+// UI でモード切り替えボタンを追加
+function toggleTilingMode() {
+    useTiling = !useTiling;
+    // 現在の処理を停止して新しい処理を開始
+    if (useTiling) {
+        predictWebcamWithTiling();
+    } else {
+        predictWebcam();
+    }
 }
