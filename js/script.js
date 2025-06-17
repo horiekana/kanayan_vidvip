@@ -164,55 +164,52 @@ function createTileCanvas(video, row, col) {
     };
 }
 
+let lastPredictionTime = 0;
+const MIN_PREDICTION_INTERVAL = 30; // ms, 1フレーム1回だけ推論するための最小間隔
+
 async function predictWebcamWithTiling() {
     if (stopCurrentPrediction) return;
-    // detect用に必ずIMAGEモードで実行
     if (runningMode !== "IMAGE") {
         runningMode = "IMAGE";
         await objectDetector.setOptions({ runningMode: "IMAGE" });
     }
-    let nowInMs = Date.now();
-    if (video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime;
-        //タイル認識が使われたよのログを出力
-        console.log("predictWebcamWithTiling called at time:", nowInMs);
-        let allDetections = [];
-        
-        // 3x3のタイルに分割して処理
-        for (let row = 0; row < GRID_ROWS; row++) {
-            for (let col = 0; col < GRID_COLS; col++) {
-                const tileInfo = createTileCanvas(video, row, col);
-                try {
-                    console.log(`start detect: [${row}, ${col}]`);
-                    console.log(`canvas size: [${tileInfo.canvas.width}, ${tileInfo.canvas.height}]`);
-                    // canvasの内容が空でないか一部だけ確認
-                    console.log(tileInfo.canvas.toDataURL().slice(0, 50));
-                    const tileDetections = await objectDetector.detect(tileInfo.canvas);
-                    if (!tileDetections || !Array.isArray(tileDetections.detections)) {
-                        console.error(`detect returned invalid result at tile [${row}, ${col}]`, tileDetections);
-                        continue;
+    let now = performance.now();
+    if (now - lastPredictionTime > MIN_PREDICTION_INTERVAL) {
+        lastPredictionTime = now;
+        let nowInMs = Date.now();
+        if (video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            let allDetections = [];
+            for (let row = 0; row < GRID_ROWS; row++) {
+                for (let col = 0; col < GRID_COLS; col++) {
+                    const tileInfo = createTileCanvas(video, row, col);
+                    try {
+                        console.log(`start detect: [${row}, ${col}]`);
+                        console.log(`canvas size: [${tileInfo.canvas.width}, ${tileInfo.canvas.height}]`);
+                        console.log(tileInfo.canvas.toDataURL().slice(0, 50));
+                        const tileDetections = await objectDetector.detect(tileInfo.canvas);
+                        if (!tileDetections || !Array.isArray(tileDetections.detections)) {
+                            console.error(`detect returned invalid result at tile [${row}, ${col}]`, tileDetections);
+                            continue;
+                        }
+                        if (tileDetections.detections.length === 0) {
+                            console.log(`end detect: [${row}, ${col}] (no detections)`);
+                        } else {
+                            console.log(`end detect: [${row}, ${col}]`, tileDetections);
+                        }
+                        tileDetections.detections.forEach(detection => {
+                            detection.boundingBox.originX += tileInfo.offsetX;
+                            detection.boundingBox.originY += tileInfo.offsetY;
+                            allDetections.push(detection);
+                        });
+                    } catch (e) {
+                        console.error(`detect error at tile [${row}, ${col}]`, e);
                     }
-                    if (tileDetections.detections.length === 0) {
-                        console.log(`end detect: [${row}, ${col}] (no detections)`);
-                    } else {
-                        console.log(`end detect: [${row}, ${col}]`, tileDetections);
-                    }
-                    tileDetections.detections.forEach(detection => {
-                        detection.boundingBox.originX += tileInfo.offsetX;
-                        detection.boundingBox.originY += tileInfo.offsetY;
-                        allDetections.push(detection);
-                    });
-                } catch (e) {
-                    console.error(`detect error at tile [${row}, ${col}]`, e);
                 }
             }
+            const mergedDetections = mergeOverlappingDetections(allDetections);
+            gotDetections({ detections: mergedDetections });
         }
-        
-        // 重複する検出結果をマージ
-        const mergedDetections = mergeOverlappingDetections(allDetections);
-        
-        // 全体の検出結果を処理
-        gotDetections({ detections: mergedDetections });
     }
     if (!stopCurrentPrediction) {
         window.requestAnimationFrame(predictWebcamWithTiling);
