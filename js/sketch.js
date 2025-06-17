@@ -154,7 +154,7 @@ function updateProcessingStatsDisplay() {
     
     statsElement.innerHTML = `
         検出数: ${processingStats.detectionCount} | 
-        モード: ${processingMode === 'tiling' ? '分割処理(3x3)' : '通常処理'} | 
+        モード: ${processingMode === 'tiling' ? '分割処理(6x8)' : '通常処理'} | 
         更新: ${new Date(processingStats.lastUpdateTime).toLocaleTimeString()}
     `;
 }

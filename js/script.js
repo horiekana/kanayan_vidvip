@@ -116,7 +116,7 @@ async function predictWebcam() {
 
 // 画像分割設定
 const GRID_ROWS = 6;      // 縦の分割数
-const GRID_COLS = 6;      // 横の分割数
+const GRID_COLS = 8;      // 横の分割数
 const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
 
 // Canvas要素を作成してタイル画像を切り出す関数（重複領域対応）
