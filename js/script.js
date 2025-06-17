@@ -51,8 +51,8 @@ async function enableCam(event) {
     // getUsermedia parameters
     const constraints = {
         video: {
-            width: { ideal: 3840 },  // 4K (横) を追加
-            height: { ideal: 2160 }, // 4K (縦) を追加
+            width: { ideal: 640 },  // 解像度を下げてWebGL負荷を軽減
+            height: { ideal: 480 },
             facingMode: 'environment' // 元々あったfacingModeも維持
         },
         audio: false // 音声が必要なければfalseを追加
@@ -62,7 +62,8 @@ async function enableCam(event) {
         .getUserMedia(constraints)
         .then(function (stream) {
             video.srcObject = stream;
-            video.addEventListener("loadeddata", () => {
+            // canplayイベントで推論開始
+            video.addEventListener("canplay", () => {
                 // ストリームの解像度が実際にどうなったかログに出力して確認
                 console.log('Actual video resolution:', video.videoWidth, 'x', video.videoHeight);
                 if (useTiling) {
@@ -90,6 +91,7 @@ async function enableCam(event) {
 }
 let lastVideoTime = -1;
 async function predictWebcam() {
+    if (stopCurrentPrediction) return;
     // if image mode is initialized, create a new classifier with video runningMode
     if (runningMode === "IMAGE") {
         runningMode = "VIDEO";
@@ -103,9 +105,13 @@ async function predictWebcam() {
 
         //displayVideoDetections(detections);
         gotDetections(detections);
+        //predictwebcamが使われたよのログを出力
+        console.log("predictWebcam called at time:", nowInMs, "with detections:", detections.detections.length);
     }
-    // Call this function again to keep predicting when the browser is ready
-    window.requestAnimationFrame(predictWebcam);
+    if (!stopCurrentPrediction) {
+        // Call this function again to keep predicting when the browser is ready
+        window.requestAnimationFrame(predictWebcam);
+    }
 }
 
 // 画像分割設定
@@ -115,6 +121,7 @@ const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
 
 // Canvas要素を作成してタイル画像を切り出す関数（重複領域対応）
 function createTileCanvas(video, row, col) {
+    console.log("video.readyState:", video.readyState, "video.paused:", video.paused, "video.currentTime:", video.currentTime);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
@@ -158,33 +165,46 @@ function createTileCanvas(video, row, col) {
 }
 
 async function predictWebcamWithTiling() {
-    if (runningMode === "IMAGE") {// 画像モードが初期化されている場合、ビデオモードに切り替える
-        runningMode = "VIDEO";
-        await objectDetector.setOptions({ runningMode: "VIDEO" });
-    }// タイル処理のための時間を記録
-    
-    let nowInMs = Date.now();// 現在の時刻をミリ秒で取得
+    if (stopCurrentPrediction) return;
+    // detect用に必ずIMAGEモードで実行
+    if (runningMode !== "IMAGE") {
+        runningMode = "IMAGE";
+        await objectDetector.setOptions({ runningMode: "IMAGE" });
+    }
+    let nowInMs = Date.now();
     if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
-        
+        //タイル認識が使われたよのログを出力
+        console.log("predictWebcamWithTiling called at time:", nowInMs);
         let allDetections = [];
         
         // 3x3のタイルに分割して処理
         for (let row = 0; row < GRID_ROWS; row++) {
             for (let col = 0; col < GRID_COLS; col++) {
                 const tileInfo = createTileCanvas(video, row, col);
-                
-                // タイルごとに物体検出を実行（静止画として処理）
-                const tileDetections = await objectDetector.detect(tileInfo.canvas);
-                //何列目何行目のタイルかをログに出力
-                console.log(`Tile [${row}, ${col}] detections:`, tileDetections.detections.length);
-                // 座標をオリジナル画像に変換
-                tileDetections.detections.forEach(detection => {
-                    // バウンディングボックスの座標を調整（重複領域のオフセットを考慮）
-                    detection.boundingBox.originX += tileInfo.offsetX;
-                    detection.boundingBox.originY += tileInfo.offsetY;
-                    allDetections.push(detection);
-                });
+                try {
+                    console.log(`start detect: [${row}, ${col}]`);
+                    console.log(`canvas size: [${tileInfo.canvas.width}, ${tileInfo.canvas.height}]`);
+                    // canvasの内容が空でないか一部だけ確認
+                    console.log(tileInfo.canvas.toDataURL().slice(0, 50));
+                    const tileDetections = await objectDetector.detect(tileInfo.canvas);
+                    if (!tileDetections || !Array.isArray(tileDetections.detections)) {
+                        console.error(`detect returned invalid result at tile [${row}, ${col}]`, tileDetections);
+                        continue;
+                    }
+                    if (tileDetections.detections.length === 0) {
+                        console.log(`end detect: [${row}, ${col}] (no detections)`);
+                    } else {
+                        console.log(`end detect: [${row}, ${col}]`, tileDetections);
+                    }
+                    tileDetections.detections.forEach(detection => {
+                        detection.boundingBox.originX += tileInfo.offsetX;
+                        detection.boundingBox.originY += tileInfo.offsetY;
+                        allDetections.push(detection);
+                    });
+                } catch (e) {
+                    console.error(`detect error at tile [${row}, ${col}]`, e);
+                }
             }
         }
         
@@ -194,8 +214,9 @@ async function predictWebcamWithTiling() {
         // 全体の検出結果を処理
         gotDetections({ detections: mergedDetections });
     }
-    
-    window.requestAnimationFrame(predictWebcamWithTiling);
+    if (!stopCurrentPrediction) {
+        window.requestAnimationFrame(predictWebcamWithTiling);
+    }
 }
 
 // 重複する検出結果をマージする関数
@@ -253,6 +274,7 @@ function calculateIoU(box1, box2) {
 
 // 処理モードの設定
 let useTiling = false; // true: 分割処理, false: 通常処理
+let stopCurrentPrediction = false; // 予測ループ停止用フラグ
 
 document.querySelector('#input_confidence_threshold').addEventListener('change', changedConfidenceThreshold);//これは信頼度閾値の変更イベントリスナーです
 function changedConfidenceThreshold(e) {
@@ -266,13 +288,21 @@ function changedConfidenceThreshold(e) {
 
 // UI でモード切り替えボタンを追加
 function toggleTilingMode() {
+    // モードを切り替える
     useTiling = !useTiling;
-    // 現在の処理を停止して新しい処理を開始
-    if (useTiling) {
-        predictWebcamWithTiling();
-    } else {
-        predictWebcam();
-    }
+    stopCurrentPrediction = true;
+    setTimeout(() => {
+        stopCurrentPrediction = false;
+        if (useTiling) {
+            predictWebcamWithTiling();
+            //切り替えたことをログに出力
+            console.log("Tiling mode enabled.");
+        } else {
+            predictWebcam();
+            //切り替えたことをログに出力
+            console.log("Tiling mode disabled.");
+        }
+    }, 100);
 }
 
 

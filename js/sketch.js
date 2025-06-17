@@ -163,20 +163,14 @@ function updateProcessingStatsDisplay() {
 function toggleProcessingMode() {
     // モードを切り替え
     processingMode = processingMode === 'normal' ? 'tiling' : 'normal';
-    
     console.log(`処理モードを切り替えました: ${processingMode}`);
-    
     // script.jsのモード切り替え関数を呼び出し
     if (typeof toggleTilingMode === 'function') {
-        // script.jsの変数も同期
-        if (typeof useTiling !== 'undefined') {
-            useTiling = (processingMode === 'tiling');
-        }
+        // useTilingを直接書き換えず、toggleTilingModeのみ呼ぶ
         toggleTilingMode();
     } else {
         console.warn('toggleTilingMode関数が見つかりません。script.jsが正しく読み込まれているか確認してください。');
     }
-    
     // UI更新
     updateModeButtonText();
     updateProcessingStatsDisplay();
