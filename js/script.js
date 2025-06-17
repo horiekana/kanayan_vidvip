@@ -274,3 +274,8 @@ function toggleTilingMode() {
         predictWebcam();
     }
 }
+
+
+// グローバルスコープに公開
+window.toggleTilingMode = toggleTilingMode;
+window.useTiling = useTiling;
