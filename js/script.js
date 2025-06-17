@@ -51,8 +51,8 @@ async function enableCam(event) {
     // getUsermedia parameters
     const constraints = {
         video: {
-            width: { ideal: 640 },  // 解像度を下げてWebGL負荷を軽減
-            height: { ideal: 480 },
+            width: { ideal: 3840 }, // 4K解像度の理想値
+            height: { ideal: 2160 }, // 4K解像度の理想値
             facingMode: 'environment' // 元々あったfacingModeも維持
         },
         audio: false // 音声が必要なければfalseを追加
@@ -115,8 +115,8 @@ async function predictWebcam() {
 }
 
 // 画像分割設定
-const GRID_ROWS = 3;      // 縦の分割数
-const GRID_COLS = 3;      // 横の分割数
+const GRID_ROWS = 6;      // 縦の分割数
+const GRID_COLS = 6;      // 横の分割数
 const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
 
 // Canvas要素を作成してタイル画像を切り出す関数（重複領域対応）
