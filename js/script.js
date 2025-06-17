@@ -90,6 +90,7 @@ async function enableCam(event) {
         });
 }
 let lastVideoTime = -1;
+let lastPredictionTime = 0;
 async function predictWebcam() {
     if (stopCurrentPrediction) return;
     // if image mode is initialized, create a new classifier with video runningMode
