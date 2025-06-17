@@ -293,6 +293,7 @@ function toggleTilingMode() {
     stopCurrentPrediction = true;
     setTimeout(() => {
         stopCurrentPrediction = false;
+        lastVideoTime = -1; // 切り替え時に必ず初期化
         if (useTiling) {
             predictWebcamWithTiling();
             //切り替えたことをログに出力
@@ -302,7 +303,7 @@ function toggleTilingMode() {
             //切り替えたことをログに出力
             console.log("Tiling mode disabled.");
         }
-    }, 100);
+    }, 100); // 100ms待機で多重起動をより確実に防ぐ
 }
 
 
