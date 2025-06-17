@@ -51,8 +51,8 @@ async function enableCam(event) {
     // getUsermedia parameters
     const constraints = {
         video: {
-            width: { ideal: 3840 }, // 4K解像度の理想値
-            height: { ideal: 2160 }, // 4K解像度の理想値
+            width: { ideal: 3840, min: 1920, max: 3840 }, // 4Kを強くリクエスト
+            height: { ideal: 2160, min: 1080, max: 2160 },
             facingMode: 'environment' // 元々あったfacingModeも維持
         },
         audio: false // 音声が必要なければfalseを追加
