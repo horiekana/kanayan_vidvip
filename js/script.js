@@ -305,6 +305,7 @@ function toggleTilingMode() {
     setTimeout(async () => {
         stopCurrentPrediction = false;
         lastVideoTime = -1;
+        lastPredictionTime = 0;
         if (useTiling) {
             await recreateObjectDetector("IMAGE");
             predictWebcamWithTiling();
