@@ -47,6 +47,12 @@ function setup() {
 
 function draw() {
     clear();
+    
+    // 分割モード時にグリッド線を描画
+    if (processingMode === 'tiling') {
+        drawTilingGrid();
+    }
+    
     if (results) {
         for (let detection of results.detections) {
             let index = detection.categories[0].index;
@@ -82,6 +88,49 @@ function draw() {
     rect(0, 0, 640, 480);
 
     stroke(250);
+}
+
+// グリッド線描画関数
+function drawTilingGrid() {
+    // グリッドの設定をscript.jsから取得（未定義の場合はデフォルト値を使用）
+    const gridRows = window.GRID_ROWS || 6;
+    const gridCols = window.GRID_COLS || 4;
+    
+    // Webカメラ要素を取得
+    const webcamElement = document.querySelector('#webcam');
+    let videoWidth, videoHeight;
+    
+    // ビデオが読み込まれているかチェック
+    if (webcamElement && webcamElement.readyState >= 1 && webcamElement.videoWidth > 0 && webcamElement.videoHeight > 0) {
+        videoWidth = webcamElement.videoWidth;
+        videoHeight = webcamElement.videoHeight;
+    } else {
+        // ビデオが読み込まれていない場合はcanvasのサイズを使用
+        videoWidth = width;
+        videoHeight = height;
+    }
+    
+    // キャンバスとビデオのサイズ比
+    const scaleX = width / videoWidth;
+    const scaleY = height / videoHeight;
+    
+    // グリッド線の設定
+    push();
+    stroke(255, 255, 255, 80); // 白色、半透明
+    strokeWeight(1);
+    
+    // 縦線を描画
+    for (let col = 1; col < gridCols; col++) {
+        const x = col * (width / gridCols);
+        line(x, 0, x, height);
+    }
+    
+    // 横線を描画
+    for (let row = 1; row < gridRows; row++) {
+        const y = row * (height / gridRows);
+        line(0, y, width, y);
+    }
+    pop();
 }
 
 // モード切り替えボタンの作成
@@ -164,6 +213,7 @@ function toggleProcessingMode() {
     // モードを切り替え
     processingMode = processingMode === 'normal' ? 'tiling' : 'normal';
     console.log(`処理モードを切り替えました: ${processingMode}`);
+    
     // script.jsのモード切り替え関数を呼び出し
     if (typeof toggleTilingMode === 'function') {
         // useTilingを直接書き換えず、toggleTilingModeのみ呼ぶ
@@ -171,9 +221,13 @@ function toggleProcessingMode() {
     } else {
         console.warn('toggleTilingMode関数が見つかりません。script.jsが正しく読み込まれているか確認してください。');
     }
+    
     // UI更新
     updateModeButtonText();
     updateProcessingStatsDisplay();
+    
+    // 強制的にcanvasを再描画して、グリッド線の表示を更新
+    redraw();
 }
 
 function getColorByIndex(index) {

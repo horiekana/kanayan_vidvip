@@ -121,6 +121,11 @@ const GRID_ROWS = 6;      // 縦の分割数
 const GRID_COLS = 4;      // 横の分割数
 const OVERLAP_RATIO = 0.1; // 重複領域の比率（10%）
 
+// グローバルスコープに公開（sketch.jsからアクセスできるようにする）
+window.GRID_ROWS = GRID_ROWS;
+window.GRID_COLS = GRID_COLS;
+window.OVERLAP_RATIO = OVERLAP_RATIO;
+
 // Canvas要素を作成してタイル画像を切り出す関数（重複領域対応）
 function createTileCanvas(video, row, col) {
     console.log("video.readyState:", video.readyState, "video.paused:", video.paused, "video.currentTime:", video.currentTime);
